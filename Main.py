@@ -1,5 +1,5 @@
 #Define global variables
-__version__ = "1.1.11"
+__version__ = "1.1.12"
 is_all_fine = True
 error_text = ""
 canCreate = False
@@ -10,9 +10,9 @@ campaigns_new_array = []
 campaigns_del_array = []
 timezones_array = []
 skillgroups_array = []
-ucce_username = ""
-ucce_pass = ""
-ucce_server = ""
+ucce_username = "username@domain (with dots)"
+ucce_pass = "password"
+ucce_server = "server@domain (with dots)"
 
 #Try to load all necessary libs
 from PyQt5 import QtWidgets	#GUI
@@ -192,7 +192,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				error_text = str(response.status_code) + " - " + response.reason
 		except Exception:
 			is_all_fine = False
-			error_text = "Error while calling 'ucce_http_request'"
+			error_text = "Error while calling 'ucce_http_request': " + error_text
 			
 		if is_all_fine: 
 			try:
@@ -1920,6 +1920,12 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			is_all_fine = save_file("connection.bin",text)					
 		if is_all_fine:
 			error_text = "Data saved successfully."
+			self.pushButton_Retrieve.setEnabled(True)
+			try:
+				self.pushButton_Retrieve.clicked.disconnect()
+			except:
+				pass
+			self.pushButton_Retrieve.clicked.connect(self.clicked_retrieve)
 			self.statusbar.setStyleSheet("color:green;font-weight:bold;")
 		else:
 			error_text = 'Error while saving "connection.bin"'
