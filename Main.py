@@ -1,5 +1,5 @@
 #Define global variables
-__version__ = "1.1.12"
+__version__ = "1.2.1"
 is_all_fine = True
 error_text = ""
 canCreate = False
@@ -13,6 +13,12 @@ skillgroups_array = []
 ucce_username = "username@domain (with dots)"
 ucce_pass = "password"
 ucce_server = "server@domain (with dots)"
+ucce_sql_username = "domain\\username"
+ucce_sql_pass = "password"
+ucce_sql_enable = False
+ucce_sql_NT_auth = True
+ucce_sql_port = "1433"
+ucce_instance = ""
 
 #Try to load all necessary libs
 from PyQt5 import QtWidgets	#GUI
@@ -22,6 +28,7 @@ from copy import deepcopy #deepcopy for nested arrays
 from random import randint #Generate name & id for new campaign
 from datetime import date, time, datetime, timedelta #compare dates
 import requests #HTTP
+from pyodbc import connect #SQL
 from vi_utils import * #Global functions 4 this project
 from GUI import Ui_MainWindow, About_Dialog, Connection_Dialog
 
@@ -31,6 +38,8 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		self.setupUi(self)  #Initialize main window
 		
 		global is_all_fine, error_text, ucce_username, ucce_pass, ucce_server
+		global ucce_sql_username, ucce_sql_pass, ucce_sql_enable, ucce_sql_NT_auth
+		global ucce_instance, ucce_sql_port
 		need_fill_connections = False
 		
 		#Connect About window to menu
@@ -38,16 +47,20 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		#Connect Connection window to menu
 		self.action_Settings.triggered.connect(self.open_connection_dialog)
 		
-		#Open file with connection's properties
+		print("Try to open connection.bin")
 		data_file = open_file("connection.bin")
-		if data_file == -1: #File not found
+		if data_file == -1:
 			is_all_fine = False
-			error_text = 'File "connection.bin" not found.'
-		elif data_file == -2: #Error while reading
+			error_text = 'File "connection.bin" not found'
+		elif data_file == -2:
 			is_all_fine = False
-			error_text = 'Error while opening "connection.bin".'
+			error_text = 'Error while opening "connection.bin"'
+		else:
+			error_text = 'Successfully'
+		print(error_text)
+		print("========================")
 		if data_file == -1 or data_file == -2:
-			#Ask to make new file
+			print("Ask to make new file")
 			FileNotFoundMessageBox = QtWidgets.QMessageBox()
 			FileNotFoundMessageBox.setIcon(QtWidgets.QMessageBox.Critical)
 			FileNotFoundMessageBox.setWindowTitle("File not found")
@@ -56,8 +69,11 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			NoButton = FileNotFoundMessageBox.addButton('No', QtWidgets.QMessageBox.RejectRole)
 			FileNotFoundMessageBox.exec()
 			if FileNotFoundMessageBox.clickedButton() == YesButton:
+				ucce_sql_username = getUser_name()
+				ucce_sql_credentials = fromUserPass2Credentials(ucce_sql_username,ucce_sql_pass)
 				text = encrypt_data(fromUserPass2Credentials("username@domain (with dots)","password"),
-					"server@domain (with dots)")
+					"server@domain (with dots)",str(ucce_sql_enable),str(ucce_sql_NT_auth),
+					ucce_sql_credentials,ucce_instance,ucce_sql_port)
 				if text == -1:
 					error_text = "Cann't load host's information"
 					is_all_fine = False
@@ -71,20 +87,29 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 					try:
 						data_file = open_file("connection.bin")
 						decrypted_text = decrypt_data(data_file)
-						is_all_fine, error_text, ucce_username, ucce_pass, ucce_server = load_connection_data(decrypted_text)
+						connection_data = load_connection_data(decrypted_text)
+						is_all_fine = connection_data["is_all_fine"]
+						error_text = connection_data["error_text"]						
 					except:
 						pass
 					need_fill_connections = True
 				else:
 					error_text = 'Error creating file "connection.bin"'
+				print(error_text)
+			else:
+				print("Not accepted by user")
+			print("========================")
 		else:
+			print("Try to decrypt file")
 			is_all_fine = True
 			decrypted_text = decrypt_data(data_file)
-			if decrypted_text == -2: #File is not decoded
+			if decrypted_text == -2:
 				is_all_fine = False
 				error_text = 'Error opening file "connection.bin". Perhaps it created for different host or user. '
 				error_text = error_text + 'You need create new one via "Connection\Settings"'
-				#Ask to make new file
+				print(error_text)
+				print("========================")
+				print("Ask to make new file")
 				FileNotDecryptedMessageBox = QtWidgets.QMessageBox()
 				FileNotDecryptedMessageBox.setIcon(QtWidgets.QMessageBox.Critical)
 				FileNotDecryptedMessageBox.setWindowTitle("File not found")
@@ -94,8 +119,11 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				NoButton = FileNotDecryptedMessageBox.addButton('No', QtWidgets.QMessageBox.RejectRole)
 				FileNotDecryptedMessageBox.exec()
 				if FileNotDecryptedMessageBox.clickedButton() == YesButton:
-					ttext = encrypt_data(fromUserPass2Credentials("username@domain (with dots)","password"),
-						"server@domain (with dots)")
+					ucce_sql_username = getUser_name()
+					ucce_sql_credentials = fromUserPass2Credentials(ucce_sql_username,ucce_sql_pass)
+					text = encrypt_data(fromUserPass2Credentials("username@domain (with dots)","password"),
+						"server@domain (with dots)",str(ucce_sql_enable),str(ucce_sql_NT_auth),
+						ucce_sql_credentials,ucce_instance,ucce_sql_port)
 					if text == -1:
 						error_text = "Cann't load host's information"
 						is_all_fine = False
@@ -109,18 +137,39 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 						try:
 							data_file = open_file("connection.bin")
 							decrypted_text = decrypt_data(data_file)
-							is_all_fine, error_text, ucce_username, ucce_pass, ucce_server = load_connection_data(decrypted_text)
+							connection_data = load_connection_data(decrypted_text)
+							is_all_fine = connection_data["is_all_fine"]
+							error_text = connection_data["error_text"]							
 						except:
 							pass
 						need_fill_connections = True
 					else:
 						error_text = 'Error creating file "connection.bin"'
-			elif decrypted_text == -1: #File is not decoded
+					print(error_text)
+				else:
+					print("Not accepted by user")
+				print("========================")					
+			elif decrypted_text == -1:
 				is_all_fine = False
-				error_text = "Cann't load this host's information"		
+				error_text = "Cann't load this host's information"
+				print(error_text)
+				print("========================")			
 			else:
-				is_all_fine, error_text, ucce_username, ucce_pass, ucce_server = load_connection_data(decrypted_text)
+				print("Successfully")
+				print("========================")			
+				connection_data = load_connection_data(decrypted_text)
+				is_all_fine = connection_data["is_all_fine"]
+				error_text = connection_data["error_text"]				
 		if is_all_fine:
+			ucce_username = connection_data["ucce_username"]
+			ucce_pass = connection_data["ucce_pass"]
+			ucce_server = connection_data["ucce_server"]
+			ucce_sql_enable = connection_data["ucce_sql_enable"]
+			ucce_sql_NT_auth = connection_data["ucce_sql_NT_auth"]
+			ucce_sql_username = connection_data["ucce_sql_username"]
+			ucce_sql_pass = connection_data["ucce_sql_pass"]
+			ucce_instance = connection_data["ucce_instance"]
+			ucce_sql_port = connection_data["ucce_sql_port"]
 			#Filters activation
 			self.comboBox_Filter.currentIndexChanged.connect(self.comboFilter_changed)
 			self.comboBox_Condition.currentIndexChanged.connect(self.comboCondition_changed)
@@ -136,15 +185,19 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			self.statusbar.showMessage("File created successfully. Current version of application:" + __version__)
 			self.open_connection_dialog()
 
-	def closeEvent(self,event): #Try to close dialogs windows if main one closed wirh cross
+	def closeEvent(self,event): #Try to close dialogs windows if main one closed with cross
+		print("Main window closed with cross")
 		try:
 			self.dialog_connect.close()
+			print("dialog_connect closed successfully")	
 		except:
 			pass
 		try:
 			self.dialog_about.close()
+			print("dialog_about closed successfully")
 		except:
 			pass
+		print("========================")
 
 #Part 1. HTTP functions:
 	def ucce_http_request(self,url): #HTTP GET request
@@ -530,10 +583,48 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			del_result = "Other error"
 		return del_result
 
-#Part 2. Business logic functions:
+#Part 2. SQL functions:
+	def rem_sg_sql(self): #Filter Skill-groups, assigned to non-API campaigns
+		global ucce_server, ucce_sql_username, ucce_sql_pass
+		global ucce_sql_NT_auth, ucce_instance, ucce_sql_port
+		global skillgroups_array, error_text
+		sgs_na = []
+		#SQL select:
+		sql = "select tS.PeripheralName, tS.SkillTargetID"  
+		sql += " from t_Campaign_Skill_Group tCS,"
+		sql += " t_Skill_Group tS"
+		sql += " where tCS.SkillTargetID = tS.SkillTargetID"
+		#Connection String:
+		connection_string = "Driver={ODBC Driver 17 for SQL Server};"
+		connection_string += "SERVER=" + ucce_server + "," + ucce_sql_port + ";"
+		connection_string += "DATABASE=" + ucce_instance + "_awdb;"
+		if ucce_sql_NT_auth:
+			connection_string += "Trusted_Connection=yes;"
+		else:
+			connection_string += "Trusted_Connection=no;"
+			connection_string += "UID=" + ucce_sql_username + ";"
+			connection_string += "PWD=" + ucce_sql_pass + ";"
+		try:
+			cursor = connect(connection_string).cursor()
+			cursor.execute(sql)
+			for row in cursor.fetchall():
+				row_to_list = [elem for elem in row]
+				sgs_na.append(row_to_list)
+			for skillgroup in deepcopy(skillgroups_array): #Go through copy of list
+				sg_name = skillgroup[0]
+				for skillgroup_na in sgs_na:
+					if sg_name == skillgroup_na[0]:
+						skillgroups_array.remove(skillgroup) #And delete - from original
+			error_text = "Non-API campaign's skill-groups filtered successfully"
+			is_all_fine = True
+		except Exception as err:
+			error_text = str(err)
+			is_all_fine = False
+		
+#Part 3. Business logic functions:
 	def check_filter_campaigns(self): #Validate campaign's filters
 			is_filter_fine = True
-			error_text = ""
+			error_text = "Successfully"
 			CurrentText_Filter = str(self.comboBox_Filter.currentText())
 			CurrentText_Value = str(self.comboBox_Value.currentText())
 			if CurrentText_Filter in ["Campaign Name"]:
@@ -884,6 +975,10 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 	def campaign_selected(self, item = None): #Campaign is selected in Campaign's list
 		global campaigns_new_array, campaigns_array, timezones_array, skillgroups_array, campaigns_del_array
 		global canDelete, canUpdate, ucce_username, ucce_pass, ucce_server
+		is_not_deleted = True
+		print('Clear fields')
+		self.selected_CampaignClear()
+		print("========================")
 		if item is None:
 			item = self.listWidget_Campaigns_List.currentItem()
 		for list_item in self.listWidget_Campaigns_List.findItems("*", Qt.MatchWildcard):
@@ -894,49 +989,16 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		font.setBold(True)
 		self.listWidget_Campaigns_List.currentItem().setData(Qt.FontRole, font) #And add to current
 		selected_campaign_id = item.data(Qt.UserRole)
+		print('Campaign with id ' + selected_campaign_id + ' selected')
+		print("========================")
 		self.statusbar.showMessage("")
 		#unblock buttons
 		if canDelete and ("New" not in selected_campaign_id):
+			print('Admin has "canDelete" role. Unblocking Delete button')
 			self.pushButton_Delete.setEnabled(True)
+			print("========================")
 		else:
 			self.pushButton_Delete.setEnabled(False)
-		#make fields editable
-		self.pushButton_Remove_SG.setEnabled(False)
-		if canUpdate:
-			self.lineEdit_Name.setEnabled(True)
-			self.checkBox_Campaign_Enabled.setEnabled(True)
-			self.comboBox_Dialing_Mode.setEnabled(True)
-			self.comboBox_Campaign_Type.setEnabled(True)
-			self.lineEdit_Description.setEnabled(True)
-			self.lineEdit_Lines.setEnabled(True)
-			self.lineEdit_Max_Lines.setEnabled(True)
-			self.lineEdit_Prefix.setEnabled(True)
-			self.checkBox_Aban_Call_Limit.setEnabled(True)
-			self.lineEdit_Calls_Per_Adjustment.setEnabled(True)
-			self.lineEdit_Max_Gain.setEnabled(True)
-			self.lineEdit_No_Answe_Rin_Limit.setEnabled(True)
-			self.lineEdit_Attempts.setEnabled(True)
-			self.lineEdit_Min_Call_Duration.setEnabled(True)
-			self.checkBox_Pers_Callback.setEnabled(True)
-			self.lineEdit_No_Answer_Delay.setEnabled(True)
-			self.lineEdit_Busy_Delay.setEnabled(True)
-			self.lineEdit_Customer_Aban_Delay.setEnabled(True)
-			self.lineEdit_Dialer_Aban_Delay.setEnabled(True)
-			self.lineEdit_AMD_Delay.setEnabled(True)
-			self.lineEdit_Customer_Home_Delay.setEnabled(True)
-			self.checkBox_CPA_Enable.setEnabled(True)
-			self.lineEdit_Minimum_Silence_Period.setEnabled(True)
-			self.lineEdit_Analysis_Period.setEnabled(True)
-			self.lineEdit_Minimum_Valid_Speech.setEnabled(True)
-			self.lineEdit_Maximum_Analysis_Time.setEnabled(True)
-			self.lineEdit_Maximum_Term_Tone_Analysis.setEnabled(True)
-			self.comboBox_TimeZone.setEnabled(True)
-			self.lineEdit_StartDate.setEnabled(True)
-			self.lineEdit_StartTime.setEnabled(True)
-			self.lineEdit_EndDate.setEnabled(True)
-			self.lineEdit_EndTime.setEnabled(True)
-			self.lineEdit_Reserv_Percentage.setEnabled(True)
-			self.pushButton_Add_SG.setEnabled(True)
 		#find what Campaign is selected
 		for campaign in campaigns_new_array:		
 			if campaign[0] == selected_campaign_id:
@@ -985,234 +1047,197 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				timeZone_Name = campaign[41]
 				personalizedCallbackEnabled = campaign[42]
 				campaign_sg_array = deepcopy(campaign[43])
-		#Checks if current campaign was modified
+		print('Checks if current campaign (' + campaign_id + ') was modified & deleted. Enable Revert or Delete button')
 		self.isCampaignChanged(campaign_id)	
-		#Checks if current campaign was deleted
 		for campaign in campaigns_del_array:
 			if campaign[0] == selected_campaign_id:
+				is_not_deleted = False
 				self.pushButton_Revert.setEnabled(True)
 				self.pushButton_Delete.setEnabled(False)
-		#then, fill fields
-		try:
-			self.lineEdit_Name.textEdited.disconnect()
-		except:
-			pass
+		print("========================")
+		if canUpdate and is_not_deleted:
+			print('Admin has "canUpdate" role and campaign is not deleted. Unblocking elements')
+			self.lineEdit_Name.setEnabled(True)
+			self.checkBox_Campaign_Enabled.setEnabled(True)
+			self.comboBox_Dialing_Mode.setEnabled(True)
+			self.comboBox_Campaign_Type.setEnabled(True)
+			self.lineEdit_Description.setEnabled(True)
+			self.lineEdit_Lines.setEnabled(True)
+			self.lineEdit_Max_Lines.setEnabled(True)
+			self.lineEdit_Prefix.setEnabled(True)
+			self.checkBox_Aban_Call_Limit.setEnabled(True)
+			self.lineEdit_Calls_Per_Adjustment.setEnabled(True)
+			self.lineEdit_Max_Gain.setEnabled(True)
+			self.lineEdit_No_Answe_Rin_Limit.setEnabled(True)
+			self.lineEdit_Attempts.setEnabled(True)
+			self.lineEdit_Min_Call_Duration.setEnabled(True)
+			self.checkBox_Pers_Callback.setEnabled(True)
+			self.lineEdit_No_Answer_Delay.setEnabled(True)
+			self.lineEdit_Busy_Delay.setEnabled(True)
+			self.lineEdit_Customer_Aban_Delay.setEnabled(True)
+			self.lineEdit_Dialer_Aban_Delay.setEnabled(True)
+			self.lineEdit_AMD_Delay.setEnabled(True)
+			self.lineEdit_Customer_Home_Delay.setEnabled(True)
+			self.checkBox_CPA_Enable.setEnabled(True)
+			self.lineEdit_Minimum_Silence_Period.setEnabled(True)
+			self.lineEdit_Analysis_Period.setEnabled(True)
+			self.lineEdit_Minimum_Valid_Speech.setEnabled(True)
+			self.lineEdit_Maximum_Analysis_Time.setEnabled(True)
+			self.lineEdit_Maximum_Term_Tone_Analysis.setEnabled(True)
+			self.comboBox_TimeZone.setEnabled(True)
+			self.lineEdit_StartDate.setEnabled(True)
+			self.lineEdit_StartTime.setEnabled(True)
+			self.lineEdit_EndDate.setEnabled(True)
+			self.lineEdit_EndTime.setEnabled(True)
+			self.lineEdit_Reserv_Percentage.setEnabled(True)
+			self.pushButton_Add_SG.setEnabled(True)
+			if personalizedCallbackEnabled == "true":
+				self.comboBox_Pers_Callback.setEnabled(True)
+			else:
+				self.comboBox_Pers_Callback.setEnabled(False)				
+			if abandonEnabled == "true":
+				self.lineEdit_Aban_Call_Limit.setEnabled(True)
+			else:
+				self.lineEdit_Aban_Call_Limit.setEnabled(False)
+			if cpa_enabled == "true":
+				self.checkBox_Record_CPA.setEnabled(True)
+				self.checkBox_IP_AMD_Enable.setEnabled(True)
+			else:
+				self.checkBox_Record_CPA.setEnabled(False)
+				self.checkBox_IP_AMD_Enable.setEnabled(False)				
+			if ipAmdEnabled == "true":
+				self.radioButton_Aban_Call.setEnabled(True)
+				self.radioButton_Transfer_IVR.setEnabled(True)
+				if campaignPurposeType == "agentCampaign":
+					self.radioButton_Transfer_Agent.setEnabled(True)
+				else:
+					self.radioButton_Transfer_Agent.setEnabled(False)
+			else:
+				self.radioButton_Aban_Call.setEnabled(False)
+				self.radioButton_Transfer_IVR.setEnabled(False)
+			if amdTreatmentMode == "transferToIVRRoutePoint":
+				self.checkBox_Terminate_Tone_Detect.setEnabled(True)
+			else:
+				self.checkBox_Terminate_Tone_Detect.setEnabled(False)					
+		else:
+			print('Admin has not "canUpdate" role or campaign is deleted. Blocking elements')
+			self.lineEdit_Name.setEnabled(False)
+			self.checkBox_Campaign_Enabled.setEnabled(False)
+			self.comboBox_Dialing_Mode.setEnabled(False)
+			self.comboBox_Campaign_Type.setEnabled(False)
+			self.lineEdit_Description.setEnabled(False)
+			self.lineEdit_Lines.setEnabled(False)
+			self.lineEdit_Max_Lines.setEnabled(False)
+			self.lineEdit_Prefix.setEnabled(False)
+			self.checkBox_Aban_Call_Limit.setEnabled(False)
+			self.lineEdit_Calls_Per_Adjustment.setEnabled(False)
+			self.lineEdit_Max_Gain.setEnabled(False)
+			self.lineEdit_No_Answe_Rin_Limit.setEnabled(False)
+			self.lineEdit_Attempts.setEnabled(False)
+			self.lineEdit_Min_Call_Duration.setEnabled(False)
+			self.checkBox_Pers_Callback.setEnabled(False)
+			self.lineEdit_No_Answer_Delay.setEnabled(False)
+			self.lineEdit_Busy_Delay.setEnabled(False)
+			self.lineEdit_Customer_Aban_Delay.setEnabled(False)
+			self.lineEdit_Dialer_Aban_Delay.setEnabled(False)
+			self.lineEdit_AMD_Delay.setEnabled(False)
+			self.lineEdit_Customer_Home_Delay.setEnabled(False)
+			self.checkBox_CPA_Enable.setEnabled(False)
+			self.lineEdit_Minimum_Silence_Period.setEnabled(False)
+			self.lineEdit_Analysis_Period.setEnabled(False)
+			self.lineEdit_Minimum_Valid_Speech.setEnabled(False)
+			self.lineEdit_Maximum_Analysis_Time.setEnabled(False)
+			self.lineEdit_Maximum_Term_Tone_Analysis.setEnabled(False)
+			self.comboBox_TimeZone.setEnabled(False)
+			self.lineEdit_StartDate.setEnabled(False)
+			self.lineEdit_StartTime.setEnabled(False)
+			self.lineEdit_EndDate.setEnabled(False)
+			self.lineEdit_EndTime.setEnabled(False)
+			self.lineEdit_Reserv_Percentage.setEnabled(False)
+			self.pushButton_Add_SG.setEnabled(False)
+			self.comboBox_Pers_Callback.setEnabled(False)
+			self.lineEdit_Aban_Call_Limit.setEnabled(False)
+			self.checkBox_Record_CPA.setEnabled(False)
+			self.checkBox_IP_AMD_Enable.setEnabled(False)
+			self.radioButton_Aban_Call.setEnabled(False)
+			self.radioButton_Transfer_IVR.setEnabled(False)
+			self.radioButton_Transfer_Agent.setEnabled(False)
+			self.checkBox_Terminate_Tone_Detect.setEnabled(False)			
+		print("========================")					
+		print('Fill fields')
+		if personalizedCallbackEnabled == "true":
+			self.checkBox_Pers_Callback.setChecked(True)
+		else:
+			self.checkBox_Pers_Callback.setChecked(False)
 		self.lineEdit_Name.setText(name)
 		self.lineEdit_Name.textEdited.connect(lambda: self.lineEdit_Name_Edited(selected_campaign_id))
-		try:
-			self.checkBox_Campaign_Enabled.stateChanged.disconnect()
-		except:
-			pass		
 		if enabled == "true":
 			self.checkBox_Campaign_Enabled.setChecked(True)
 		else:
 			self.checkBox_Campaign_Enabled.setChecked(False)
 		self.checkBox_Campaign_Enabled.stateChanged.connect(lambda: self.checkBox_Campaign_Enabled_Changed(
 			selected_campaign_id))
-		try:
-			self.comboBox_Dialing_Mode.currentIndexChanged.disconnect()
-		except:
-			pass					
 		self.comboBox_Dialing_Mode.setCurrentText(dialingMode)
 		self.comboBox_Dialing_Mode.currentIndexChanged.connect(lambda: self.comboDialing_Mode_changed(
 			selected_campaign_id))
-		
-		try:
-			self.comboBox_Campaign_Type.currentIndexChanged.disconnect()
-		except:
-			pass
 		self.comboBox_Campaign_Type.setCurrentText(campaignPurposeType)
 		self.comboBox_Campaign_Type.currentIndexChanged.connect(lambda: self.comboCampaign_Type_changed(
 			selected_campaign_id))
-		
-		try:
-			self.lineEdit_Description.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Description.setText(description)
 		self.lineEdit_Description.textEdited.connect(lambda: self.lineEdit_Description_Edited(
 			selected_campaign_id))
-		
-		try:
-			self.lineEdit_Lines.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Lines.setText(linesPerAgent)
 		self.lineEdit_Lines.textEdited.connect(lambda: self.lineEdit_Lines_Edited(selected_campaign_id))
-			
-		try:
-			self.lineEdit_Max_Lines.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Max_Lines.setText(maximumLinesPerAgent)
 		self.lineEdit_Max_Lines.textEdited.connect(lambda: self.lineEdit_MaxLines_Edited(selected_campaign_id))
-			
-		try:
-			self.lineEdit_Prefix.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Prefix.setText(campaignPrefix)
 		self.lineEdit_Prefix.textEdited.connect(lambda: self.lineEdit_Prefix_Edited(selected_campaign_id))
-			
-		try:
-			self.checkBox_Aban_Call_Limit.stateChanged.disconnect()
-		except:
-			pass
-		try:
-			self.lineEdit_Aban_Call_Limit.textEdited.disconnect()
-		except:
-			pass		
 		self.lineEdit_Aban_Call_Limit.setText(abandonPercent)
 		if abandonEnabled == "true":
 			self.checkBox_Aban_Call_Limit.setChecked(True)
-			self.lineEdit_Aban_Call_Limit.setEnabled(True)
 		else:
 			self.checkBox_Aban_Call_Limit.setChecked(False)
-			self.lineEdit_Aban_Call_Limit.setEnabled(False)	
 		self.checkBox_Aban_Call_Limit.stateChanged.connect(lambda: self.checkAban_Call_Limit_Changed(
 			selected_campaign_id))
 		self.lineEdit_Aban_Call_Limit.textEdited.connect(lambda: self.lineEdit_Aban_Call_Limit_Edited(
 			campaign_id))
-
-		try:
-			self.lineEdit_Calls_Per_Adjustment.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Calls_Per_Adjustment.setText(predictiveCorrectionPace)
 		self.lineEdit_Calls_Per_Adjustment.textEdited.connect(lambda: self.lineEdit_Calls_Per_Adj_Edited(
 			campaign_id))
-
-		try:
-			self.lineEdit_Max_Gain.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Max_Gain.setText(predictiveGain)
 		self.lineEdit_Max_Gain.textEdited.connect(lambda: self.lineEdit_Max_Gain_Edited(campaign_id))
-
-		try:
-			self.lineEdit_No_Answe_Rin_Limit.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_No_Answe_Rin_Limit.setText(noAnswerRingLimit)
 		self.lineEdit_No_Answe_Rin_Limit.textEdited.connect(lambda: self.lineEdit_NoAnsRingLimit_Edited(
 			campaign_id))
-
-		try:
-			self.lineEdit_Attempts.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Attempts.setText(maxAttempts)
 		self.lineEdit_Attempts.textEdited.connect(lambda: self.lineEdit_Attempts_Edited(campaign_id))
-
-		try:
-			self.lineEdit_Min_Call_Duration.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Min_Call_Duration.setText(minimumCallDuration)
 		self.lineEdit_Min_Call_Duration.textEdited.connect(lambda: self.lineEdit_MinCallDur_Edited(
 			campaign_id))
-
-		try:
-			self.checkBox_Pers_Callback.stateChanged.disconnect()
-		except:
-			pass
-		try:
-			self.comboBox_Pers_Callback.currentIndexChanged.disconnect()
-		except:
-			pass
 		self.comboBox_Pers_Callback.setCurrentText(rescheduleCallbackMode)
-		if personalizedCallbackEnabled == "true":
-			self.checkBox_Pers_Callback.setChecked(True)
-			self.comboBox_Pers_Callback.setEnabled(True)
-		else:
-			self.checkBox_Pers_Callback.setChecked(False)
-			self.comboBox_Pers_Callback.setEnabled(False)
 		self.checkBox_Pers_Callback.stateChanged.connect(lambda: self.checkPers_CB_Changed(campaign_id))
 		self.comboBox_Pers_Callback.currentIndexChanged.connect(lambda: self.comboPers_CB_changed(
 			campaign_id))
-
-		try:
-			self.lineEdit_No_Answer_Delay.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_No_Answer_Delay.setText(noAnswerDelay)
 		self.lineEdit_No_Answer_Delay.textEdited.connect(lambda: self.lineEdit_NoAnsDelay_Edited(
 			campaign_id))
-
-		try:
-			self.lineEdit_Busy_Delay.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Busy_Delay.setText(busySignalDelay)
 		self.lineEdit_Busy_Delay.textEdited.connect(lambda: self.lineEdit_BusyDelay_Edited(campaign_id))
-
-		try:
-			self.lineEdit_Customer_Aban_Delay.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Customer_Aban_Delay.setText(customerAbandonedDelay)
 		self.lineEdit_Customer_Aban_Delay.textEdited.connect(lambda: self.lineEdit_CustAbanDelay_Edited(
 			campaign_id))
-
-		try:
-			self.lineEdit_Dialer_Aban_Delay.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Dialer_Aban_Delay.setText(dialerAbandonedDelay)
 		self.lineEdit_Dialer_Aban_Delay.textEdited.connect(lambda: self.lineEdit_DialerAbanDelay_Edited(
 			campaign_id))
-
-		try:
-			self.lineEdit_AMD_Delay.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_AMD_Delay.setText(answeringMachineDelay)
 		self.lineEdit_AMD_Delay.textEdited.connect(lambda: self.lineEdit_AMDDelay_Edited(campaign_id))
-
-		try:
-			self.lineEdit_Customer_Home_Delay.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Customer_Home_Delay.setText(customerNotHomeDelay)
 		self.lineEdit_Customer_Home_Delay.textEdited.connect(lambda: self.lineEdit_CustNotHomeDelay_Edited(
-			campaign_id))
-
-		try:
-			self.checkBox_CPA_Enable.stateChanged.disconnect()
-		except:
-			pass
-		try:
-			self.checkBox_Record_CPA.stateChanged.disconnect()
-		except:
-			pass
-		try:
-			self.checkBox_IP_AMD_Enable.stateChanged.disconnect()
-		except:
-			pass
-		try:
-			self.checkBox_Terminate_Tone_Detect.stateChanged.disconnect()
-		except:
-			pass		
-		try:
-			self.radioButton_Aban_Call.toggled.disconnect()
-		except:
-			pass
-		try:
-			self.radioButton_Transfer_IVR.toggled.disconnect()
-		except:
-			pass
-		try:
-			self.radioButton_Transfer_Agent.toggled.disconnect()
-		except:
-			pass	
+			campaign_id))	
 		if cpa_enabled == "true":
 			self.checkBox_CPA_Enable.setChecked(True)
-			self.checkBox_Record_CPA.setEnabled(True)
-			self.checkBox_IP_AMD_Enable.setEnabled(True)
 		else:
 			self.checkBox_CPA_Enable.setChecked(False)
-			self.checkBox_Record_CPA.setEnabled(False)
-			self.checkBox_IP_AMD_Enable.setEnabled(False)
 		self.checkBox_CPA_Enable.stateChanged.connect(lambda: self.checkCPA_Enable_Changed(campaign_id))
 		if cpa_record == "true":
 			self.checkBox_Record_CPA.setChecked(True)
@@ -1221,34 +1246,21 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		self.checkBox_Record_CPA.stateChanged.connect(lambda: self.checkRecord_CPA_Changed(campaign_id))
 		if ipAmdEnabled == "true":
 			self.checkBox_IP_AMD_Enable.setChecked(True)
-			self.radioButton_Aban_Call.setEnabled(True)
-			self.radioButton_Transfer_IVR.setEnabled(True)
-			if campaignPurposeType == "agentCampaign":
-				self.radioButton_Transfer_Agent.setEnabled(True)
-			else:
-				self.radioButton_Transfer_Agent.setEnabled(False)
 		else:
 			self.checkBox_IP_AMD_Enable.setChecked(False)
-			self.radioButton_Aban_Call.setEnabled(False)
-			self.radioButton_Transfer_IVR.setEnabled(False)
-			self.radioButton_Transfer_Agent.setEnabled(False)
 		self.checkBox_IP_AMD_Enable.stateChanged.connect(lambda: self.checkAMD_Enable_Changed(campaign_id))
-
 		if amdTreatmentMode == "transferToIVRRoutePoint":
 			self.radioButton_Aban_Call.setChecked(False)
 			self.radioButton_Transfer_IVR.setChecked(True)
 			self.radioButton_Transfer_Agent.setChecked(False)
-			self.checkBox_Terminate_Tone_Detect.setEnabled(True)
 		elif amdTreatmentMode == "transferToAgent":
 			self.radioButton_Aban_Call.setChecked(False)
 			self.radioButton_Transfer_IVR.setChecked(False)
 			self.radioButton_Transfer_Agent.setChecked(True)
-			self.checkBox_Terminate_Tone_Detect.setEnabled(False)
 		else:
 			self.radioButton_Aban_Call.setChecked(True)
 			self.radioButton_Transfer_IVR.setChecked(False)
 			self.radioButton_Transfer_Agent.setChecked(False)
-			self.checkBox_Terminate_Tone_Detect.setEnabled(False)
 		self.radioButton_Aban_Call.toggled.connect(lambda: self.radioButtons_Changed(campaign_id))
 		self.radioButton_Transfer_Agent.toggled.connect(lambda: self.radioButtons_Changed(campaign_id))
 		self.radioButton_Transfer_IVR.toggled.connect(lambda: self.radioButtons_Changed(campaign_id))
@@ -1258,102 +1270,36 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			self.checkBox_Terminate_Tone_Detect.setChecked(False)
 		self.checkBox_Terminate_Tone_Detect.stateChanged.connect(lambda: self.checkTerm_Tone_Detect_Changed(
 			campaign_id))
-
-		try:
-			self.lineEdit_Minimum_Silence_Period.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Minimum_Silence_Period.setText(cpa_minSilencePeriod)
 		self.lineEdit_Minimum_Silence_Period.textEdited.connect(lambda: self.lineEdit_MinSilPer_Edited(
 			campaign_id))
-
-		try:
-			self.lineEdit_Analysis_Period.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Analysis_Period.setText(cpa_analysisPeriod)
 		self.lineEdit_Analysis_Period.textEdited.connect(lambda: self.lineEdit_AnalysPer_Edited(campaign_id))		
-
-		try:
-			self.lineEdit_Minimum_Valid_Speech.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Minimum_Valid_Speech.setText(cpa_minimumValidSpeech)
 		self.lineEdit_Minimum_Valid_Speech.textEdited.connect(lambda: self.lineEdit_MinValSpeech_Edited(
 			campaign_id))	
-			
-		try:
-			self.lineEdit_Maximum_Analysis_Time.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Maximum_Analysis_Time.setText(cpa_maxTimeAnalysis)
 		self.lineEdit_Maximum_Analysis_Time.textEdited.connect(lambda: self.lineEdit_MaxAnalysTime_Edited(
 			campaign_id))
-			
-		try:
-			self.lineEdit_Maximum_Term_Tone_Analysis.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Maximum_Term_Tone_Analysis.setText(cpa_maxTermToneAnalysis)
 		self.lineEdit_Maximum_Term_Tone_Analysis.textEdited.connect(lambda: self.lineEdit_MaxTermTone_Edited(
 			campaign_id))
-
-		try:
-			self.comboBox_TimeZone.currentIndexChanged.disconnect()
-		except:
-			pass
 		self.comboBox_TimeZone.clear()
 		for timezone in timezones_array:
 			self.comboBox_TimeZone.addItem(timezone[0])		
 		self.comboBox_TimeZone.setCurrentText(timeZone_Name)
 		self.comboBox_TimeZone.currentIndexChanged.connect(lambda: self.comboTimeZone_changed(campaign_id))
-
-		try:
-			self.lineEdit_StartDate.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_StartDate.setText(startDate)
 		self.lineEdit_StartDate.textEdited.connect(lambda: self.lineEdit_StartDate_Edited(campaign_id))		   
-		
-		try:
-			self.lineEdit_StartTime.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_StartTime.setText(startTime)
 		self.lineEdit_StartTime.textEdited.connect(lambda: self.lineEdit_StartTime_Edited(campaign_id))
-			
-		try:
-			self.lineEdit_EndDate.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_EndDate.setText(endDate)
 		self.lineEdit_EndDate.textEdited.connect(lambda: self.lineEdit_EndDate_Edited(campaign_id))		   
-			
-		try:
-			self.lineEdit_EndTime.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_EndTime.setText(endTime)
 		self.lineEdit_EndTime.textEdited.connect(lambda: self.lineEdit_EndTime_Edited(campaign_id))
-
-		try:
-			self.lineEdit_Reserv_Percentage.textEdited.disconnect()
-		except:
-			pass
 		self.lineEdit_Reserv_Percentage.setText(reservationPercentage)
-		self.lineEdit_Reserv_Percentage.textEdited.connect(
-			lambda: self.lineEdit_Reserv_Perc_Edited(campaign_id))
+		self.lineEdit_Reserv_Percentage.textEdited.connect(lambda: self.lineEdit_Reserv_Perc_Edited(campaign_id))
 
-		try:
-			self.tableWidget_SG.itemChanged.disconnect()
-		except:
-			pass
-
-		try:
-			self.tableWidget_SG.itemClicked.disconnect()
-		except:
-			pass			
-		
 		TableWidgetRow = 0
 		self.tableWidget_SG.setRowCount(len(campaign_sg_array))
 		for skillgroup in campaign_sg_array:
@@ -1432,6 +1378,10 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				elif TableWidgetRow == 19:
 					globals()["self.comboBox_CampSG" + str(TableWidgetRow)].currentIndexChanged.connect(
 						lambda: self.comboBox_CampSG_changed(selected_campaign_id,19))
+			if canUpdate and is_not_deleted:
+				globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setEnabled(True)
+			else:
+				globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setEnabled(False)
 			self.tableWidget_SG.setCellWidget(			 #Insert SG list
 				TableWidgetRow,0, globals()["self.comboBox_CampSG" + str(TableWidgetRow)])
 			TableWidgetItem = QtWidgets.QTableWidgetItem()
@@ -1453,26 +1403,17 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			TableWidgetItem.setText(skillgroup[8])		#skillgroup[8] = abandonedRoutePoint
 			self.tableWidget_SG.setItem(TableWidgetRow,6, TableWidgetItem)
 			TableWidgetRow += 1
+		if canUpdate and is_not_deleted:
+			self.tableWidget_SG.setEnabled(True)
+		else:
+			self.tableWidget_SG.setEnabled(False)		
 		self.tableWidget_SG.itemChanged.connect(lambda: self.tableWidget_SG_ItemChanged(campaign_id))
 		self.tableWidget_SG.itemClicked.connect(lambda: self.tableWidget_SG_ItemClicked(campaign_id))
-			
-		try:
-			self.pushButton_Revert.clicked.disconnect()
-		except:
-			pass		
 		self.pushButton_Revert.clicked.connect(lambda: self.clicked_revert(selected_campaign_id))
-
-		try:
-			self.pushButton_Delete.clicked.disconnect()
-		except:
-			pass		
 		self.pushButton_Delete.clicked.connect(lambda: self.clicked_delete(campaign_id))
-		try:
-			self.pushButton_Add_SG.clicked.disconnect()
-		except:
-			pass		
 		self.pushButton_Add_SG.clicked.connect(lambda: self.clicked_add_sg(campaign_id))		
-		
+		print("========================")
+				
 	def check_new_campaign_data(self): #Validate campaign's data (after change ot for new)
 		global campaigns_array, campaigns_new_array, campaigns_del_array
 		is_validation_success_sum = True
@@ -1854,7 +1795,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				
 		return is_validation_success_sum, validation_error_sum, campaign_updates, campaign_adds, campaign_dels
 
-#Part 3. GUI functions:
+#Part 4. GUI functions:
 #=============Modal Windows=============================#
 	def open_about_dialog(self):
 		self.dialog_about = AboutDialogNew()
@@ -1869,6 +1810,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		Text += "|  PyQt5                           |  5.13.2   |      GNU GPL v3      |\n"
 		Text += "|  requests                       |  2.23.0   | Apache License v2 |\n"
 		Text += "|  cryptography               |  2.8        | Apache License v2 |\n"
+		Text += "|  pyodbc                         |  4.0.30   |             MIT             |\n"
 		Text += "|------------------------------------------------------------------|\n"
 		Text += "| API Campaign Manager |  " + __version__ + "  |       GNU GPL v3     |\n"
 		Text += "==================================\n\n"
@@ -1880,36 +1822,107 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		self.dialog_about.show()
 
 	def open_connection_dialog(self):
-		global ucce_username, ucce_pass, ucce_server
+		global ucce_username, ucce_pass, ucce_server, ucce_sql_port, ucce_instance
+		global ucce_sql_username, ucce_sql_pass, ucce_sql_enable, ucce_sql_NT_auth
 		self.dialog_connect = ConnectionDialogNew()
+
+		try:
+			self.dialog_connect.buttonBox.clicked.disconnect()
+		except:
+			pass
+		try:
+			self.dialog_connect.checkBox_SQL_Enable.stateChanged.disconnect()
+		except:
+			pass
+		try:
+			self.dialog_connect.checkBox_Integrated_Auth.stateChanged.disconnect()
+		except:
+			pass
+		
 		if ucce_username is None:
 			ucce_username = ""
+		if ucce_username is None:
+			ucce_pass = ""	
+		if ucce_server is None:
+			ucce_pass = ""						
+		if ucce_sql_username is None:
+			ucce_pass = ""	
+		if ucce_sql_pass is None:
+			ucce_pass = ""
+		if ucce_sql_port is None:
+			ucce_sql_port = ""
+		if ucce_instance is None:
+			ucce_instance = ""
 		if ucce_username.find('@') > 0:
 			self.dialog_connect.lineEdit_username.setText(ucce_username[:ucce_username.find('@')])
 			self.dialog_connect.lineEdit_domain.setText(ucce_username[ucce_username.find('@') + 1:])
 		else:
 			self.dialog_connect.lineEdit_username.setText(ucce_username)
 			self.dialog_connect.lineEdit_domain.setText("")			
+		if ucce_sql_NT_auth == True:
+			self.dialog_connect.checkBox_Integrated_Auth.setChecked(True)
+		else:
+			self.dialog_connect.checkBox_Integrated_Auth.setChecked(False)
+
+		if ucce_sql_enable == True:
+			self.dialog_connect.checkBox_SQL_Enable.setChecked(True)
+			self.dialog_connect.checkBox_Integrated_Auth.setEnabled(True)
+			self.dialog_connect.lineEdit_ucce_inst.setEnabled(True)
+			self.dialog_connect.lineEdit_sql_port.setEnabled(True)
+			if ucce_sql_NT_auth == True:
+				self.dialog_connect.lineEdit_sql_username.setEnabled(False)
+				self.dialog_connect.lineEdit_sql_pass.setEnabled(False)
+			else:
+				self.dialog_connect.lineEdit_sql_username.setEnabled(True)
+				self.dialog_connect.lineEdit_sql_pass.setEnabled(True)			
+		else:
+			self.dialog_connect.checkBox_SQL_Enable.setChecked(False)
+			self.dialog_connect.checkBox_Integrated_Auth.setEnabled(False)
+			self.dialog_connect.lineEdit_sql_username.setEnabled(False)
+			self.dialog_connect.lineEdit_sql_pass.setEnabled(False)
+			
 		self.dialog_connect.lineEdit_pass.setText(ucce_pass)
 		self.dialog_connect.lineEdit_server.setText(ucce_server)
-		#Для кнопки "Save"
+		self.dialog_connect.lineEdit_sql_username.setText(ucce_sql_username)
+		self.dialog_connect.lineEdit_sql_pass.setText(ucce_sql_pass)
+		self.dialog_connect.lineEdit_ucce_inst.setText(ucce_instance)
+		self.dialog_connect.lineEdit_sql_port.setText(ucce_sql_port)				
 		self.dialog_connect.buttonBox.clicked.connect(self.clicked_save_connect)
+		self.dialog_connect.checkBox_SQL_Enable.stateChanged.connect(
+			self.clicked_SQL_Enable_connect)
+		self.dialog_connect.checkBox_Integrated_Auth.stateChanged.connect(
+			self.clicked_Integrated_Auth_connect)
 		self.dialog_connect.show()
 		
 	def clicked_save_connect(self):
 		global ucce_username, ucce_pass, ucce_server, is_all_fine, error_text
+		global ucce_sql_username, ucce_sql_pass, ucce_sql_enable, ucce_sql_NT_auth
+		global ucce_sql_port, ucce_instance
+		print("Save connection settings")
 		newusername = self.dialog_connect.lineEdit_username.text()
 		newdomain = self.dialog_connect.lineEdit_domain.text()
-		newpass = self.dialog_connect.lineEdit_pass.text()
-		newserver = self.dialog_connect.lineEdit_server.text()		
+		ucce_pass = self.dialog_connect.lineEdit_pass.text()
+		ucce_server = self.dialog_connect.lineEdit_server.text()		
+		ucce_sql_username = self.dialog_connect.lineEdit_sql_username.text()
+		ucce_sql_pass = self.dialog_connect.lineEdit_sql_pass.text()
+		ucce_instance = self.dialog_connect.lineEdit_ucce_inst.text()
+		ucce_sql_port = self.dialog_connect.lineEdit_sql_port.text()		
+		if self.dialog_connect.checkBox_SQL_Enable.isChecked():
+			ucce_sql_enable = True
+		else:
+			ucce_sql_enable = False
+		if self.dialog_connect.checkBox_Integrated_Auth.isChecked():
+			ucce_sql_NT_auth = True
+		else:
+			ucce_sql_NT_auth = False
 		if len(newdomain) > 0:
 			ucce_username = newusername + "@" + newdomain
 		else:
 			ucce_username = newusername
-		ucce_pass = newpass
-		ucce_server = newserver
 		ucce_credentials = fromUserPass2Credentials(ucce_username,ucce_pass)
-		text = encrypt_data(ucce_credentials,ucce_server)
+		ucce_sql_credentials = fromUserPass2Credentials(ucce_sql_username,ucce_sql_pass)
+		text = encrypt_data(ucce_credentials,ucce_server,str(ucce_sql_enable),
+			str(ucce_sql_NT_auth),ucce_sql_credentials,ucce_instance,ucce_sql_port)
 		if text == -1:
 			error_text = "Cann't load host's information"
 			is_all_fine = False
@@ -1931,7 +1944,40 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			error_text = 'Error while saving "connection.bin"'
 			self.statusbar.setStyleSheet("color:red;font-weight:bold;")
 		self.statusbar.showMessage(error_text)
+		print(error_text)
+		print("========================")
 
+	def clicked_SQL_Enable_connect(self, state):
+		global ucce_sql_enable, ucce_sql_NT_auth
+		if state == 0:
+			self.dialog_connect.checkBox_Integrated_Auth.setEnabled(False)
+			self.dialog_connect.lineEdit_sql_username.setEnabled(False)
+			self.dialog_connect.lineEdit_sql_pass.setEnabled(False)
+			self.dialog_connect.lineEdit_ucce_inst.setEnabled(False)
+			self.dialog_connect.lineEdit_sql_port.setEnabled(False)
+		else:
+			self.dialog_connect.checkBox_Integrated_Auth.setEnabled(True)
+			self.dialog_connect.lineEdit_ucce_inst.setEnabled(True)
+			self.dialog_connect.lineEdit_sql_port.setEnabled(True)				
+			if self.dialog_connect.checkBox_Integrated_Auth.isChecked() == True:
+				self.dialog_connect.lineEdit_sql_username.setEnabled(False)
+				self.dialog_connect.lineEdit_sql_pass.setEnabled(False)
+			else:
+				self.dialog_connect.lineEdit_sql_username.setEnabled(True)
+				self.dialog_connect.lineEdit_sql_pass.setEnabled(True)						
+		
+	def clicked_Integrated_Auth_connect(self, state):
+		global ucce_sql_username, ucce_sql_pass, ucce_sql_enable, ucce_sql_NT_auth
+		if state == 0:
+			self.dialog_connect.lineEdit_sql_username.setEnabled(True)
+			self.dialog_connect.lineEdit_sql_pass.setEnabled(True)
+			self.dialog_connect.lineEdit_sql_username.setText(ucce_sql_username)
+			self.dialog_connect.lineEdit_sql_pass.setText(ucce_sql_pass)			
+		else:
+			self.dialog_connect.lineEdit_sql_username.setText(getUser_name())
+			self.dialog_connect.lineEdit_sql_pass.setText("")			
+			self.dialog_connect.lineEdit_sql_username.setEnabled(False)
+			self.dialog_connect.lineEdit_sql_pass.setEnabled(False)					
 #=======================================================#
 	def selected_CampaignClear(self): #Clear Campaign Detail window
 		global campaigns_array, campaigns_new_array, campaigns_del_array
@@ -2253,7 +2299,10 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 	def clicked_retrieve(self): #Retrieve button clicked. Step one. Clear & disable Retrieve button
 		is_filter_fine = True
 		error_text = ""
-		is_filter_fine, error_text = self.check_filter_campaigns() #Validate campaign's filters
+		print("Validate campaign's filters")
+		is_filter_fine, error_text = self.check_filter_campaigns()
+		print(error_text)
+		print("========================")
 		if is_filter_fine:
 			self.pushButton_Retrieve.setEnabled(False)
 		QTimer.singleShot(300, lambda: self.clicked_retrieve2(is_filter_fine,error_text))
@@ -2269,20 +2318,30 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			campaigns_del_array = []
 			timezones_array = []
 			skillgroups_array = []
-			self.listWidget_Campaigns_List.clear()  #Clear campaign's list
+			print("Clear current campaigns list")
+			self.listWidget_Campaigns_List.clear()
 			self.selected_CampaignClear()
+			print("========================")
 		if  is_all_fine and is_filter_fine:
-			self.get_timezones("/unifiedconfig/config/timezone") #TimeZone's list
+			print("Get timezones list")
+			self.get_timezones("/unifiedconfig/config/timezone")
+			print(error_text)
+			print("========================")
 		if  is_all_fine and is_filter_fine:
-			self.get_campaigns("/unifiedconfig/config/campaign?sort=name%20asc&resultsPerPage=100") #Campaigns list
+			print("Get campaigns list")
+			self.get_campaigns("/unifiedconfig/config/campaign?sort=name%20asc&resultsPerPage=100")
+			print(error_text)
+			print("========================")			
 			#unblock Create button				
 			try:
 				self.pushButton_Add.clicked.disconnect()
 			except:
 				pass
 			if canCreate and is_all_fine:
+				print('Admin has "canCreate" role. Unblocking Add button')
 				self.pushButton_Add.setEnabled(True)
 				self.pushButton_Add.clicked.connect(self.clicked_add)
+				print("========================")
 			else:
 				self.pushButton_Add.setEnabled(False)
 			#for Save button				
@@ -2291,20 +2350,35 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			except:
 				pass
 			if canUpdate and is_all_fine:
+				print('Admin has "canUpdate" role. Unblocking Save button')
 				self.pushButton_Save.clicked.connect(self.clicked_save)
+				print("========================")				
 		if  is_all_fine and is_filter_fine:
-			self.get_skillgroups("/unifiedconfig/config/skillgroup?sort=name%20asc&resultsPerPage=100") #Skill-goups list
+			print("Get skill-groups list")
+			self.get_skillgroups("/unifiedconfig/config/skillgroup?sort=name%20asc&resultsPerPage=100")
+			print(error_text)
+			print("========================")		
 		if  is_all_fine and is_filter_fine:
-			self.filter_skillgroups() #Filter skill-groups (delete assigned to other API campaigns)
+			print("Filter skill-groups #1 (delete assigned to other API campaigns)")
+			self.filter_skillgroups()
+			print("========================")
+			if ucce_sql_enable:
+				print("Filter skill-groups #2 (delete assigned to other non-API campaigns)")
+				self.rem_sg_sql()
+				print(error_text)
+				print("========================")
 		if  is_all_fine and is_filter_fine:
-			self.filter_campaigns() #Apply campaigns filter
+			print("Apply campaigns filter")
+			self.filter_campaigns()
+			print("========================")
 		if  is_all_fine and is_filter_fine:
 			#campaigns_new_array = campaigns_array [:] #doesn't work because of nested array
 			self.statusbar.setStyleSheet("color:green;font-weight:bold;")			
 			campaigns_new_array = deepcopy(campaigns_array)
+			print("Fill campaigns list")			
 			self.fill_ListWidgetItem()
-			#self.listWidget_Campaigns_List.itemClicked.connect(self.campaign_selected)
 			self.listWidget_Campaigns_List.itemClicked.connect(self.campaign_selected)
+			print("========================")
 		else:
 			self.statusbar.setStyleSheet("color:red;font-weight:bold;")
 		self.statusbar.showMessage(error_text)
@@ -2337,20 +2411,27 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			"true","false","608","2500","112","5000","30000","New_" + strrandom,"PREDICTIVEONLY","true",EndDate,
 			"18:00","true","false","1.50","3","2.00","1","4","70","1.00","useCampaignDN","100","60","60","30",
 			"60","60","60",StartDate,"09:00",timezoneURL,timezoneName,"false",campaign_sg_array]
+		print("Add campaign button clicked. Add empty campaign with id New_" + strrandom)
 		campaigns_new_array.append(campaing_array)
+		print("========================")
+		print("And refill campaigns list with selected id New_" + strrandom)
+		print("========================")		
 		self.listWidget_Campaigns_List.clear()
 		self.fill_ListWidgetItem("New_" + strrandom)
 
 	def clicked_delete(self, campaign_id):  #Delete campaign button clicked
 		global campaigns_array, campaigns_new_array, timezones_array, skillgroups_array, campaigns_del_array
 		global canDelete, canUpdate, ucce_username, ucce_pass, ucce_server
+		print("Delete campaign button clicked. Mark campaign with id " + campaign_id + " as deleted")		
 		for campaign in campaigns_new_array:
 			if campaign[0] == campaign_id:
 				campaing_array = [campaign[0],campaign[1],campaign[2]]
 				campaigns_del_array.append(campaing_array)
+		print("========================")
+		print("And refill campaigns list with selected id " + campaign_id)
+		print("========================")				
 		self.listWidget_Campaigns_List.clear()
 		self.fill_ListWidgetItem(campaign_id)
-		self.isCampaignChanged(campaign_id)
 
 	def clicked_save(self): #Save button clicked. Step one. Disable Save button
 		self.pushButton_Save.setEnabled(False)
@@ -2358,9 +2439,14 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 
 	def clicked_save2(self): #Save campaign button clicked. Step two
 		global is_all_fine, campaigns_array,campaigns_new_array,campaigns_del_array,ucce_username,ucce_pass,ucce_server
+		print("Save button clicked")
+		print("========================")
 		is_all_fine = True
 		result = ""
+		print("Validate new configuration")
 		is_validation, validation_error, camp_upd, camp_add, camp_del = self.check_new_campaign_data()
+		print(validation_error)
+		print("========================")
 		if is_validation == False:
 			#Error message
 			err_check_new_data = QtWidgets.QMessageBox()
@@ -2370,9 +2456,11 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			YesButton = err_check_new_data.addButton('OK', QtWidgets.QMessageBox.AcceptRole)
 			err_check_new_data.exec()
 		else:
+			print("Start saving. First step - update")
 			for key, value in camp_upd.items():
 				name,url = key.split(":::")
 				update_result = self.ucce_http_update(url,value)
+				print(name + ": " + update_result)
 				if update_result == "200 - successful": #update from campaigns_new_array to campaigns_array
 					for campaign_new in campaigns_new_array:
 						if campaign_new[1] == name:
@@ -2391,8 +2479,11 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				else:
 					is_all_fine = False
 				result += "Updating " + name + "...\tResult: " + update_result + "\n"
+			print("========================")
+			print("Second step - add")
 			for name, value in camp_add.items():
 				add_result, refURL, campaign_id = self.ucce_http_add(value)
+				print(name + ": " + add_result)
 				if add_result == "201 - successful": #Mark campaign as not new and copy to campaigns_array
 					for campaign_new in campaigns_new_array:
 						if campaign_new[1] == name:
@@ -2409,8 +2500,11 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				else:
 					is_all_fine = False							
 				result += "Adding " + name + "...\tResult: " + add_result + "\n"
+			print("========================")
+			print("Third step - delete")
 			for name, value in camp_del.items():
 				del_result = self.ucce_http_del(value)
+				print(name + ": " + del_result)
 				if del_result == "200 - successful": 
 					for campaign_del in campaigns_del_array: #remove from campaigns_del_array
 						if campaign_del[1] == name:
@@ -2427,16 +2521,20 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				else:
 					is_all_fine = False
 				result += "Deleting " + name + "...\tResult: " + del_result + "\n"
+			print("========================")
 			#Result message
 			result_message = QtWidgets.QMessageBox()
 			if is_all_fine:
+				print("All changes saved successfully")
 				result_message.setIcon(QtWidgets.QMessageBox.Information)
 				result_message.setWindowTitle("Processed successfully")				
 			else:
+				print("Something gone wrong while saving")
 				result_message.setIcon(QtWidgets.QMessageBox.Warning)
 				result_message.setWindowTitle("Processed with errors")
 				self.pushButton_Save.setEnabled(True)
 				is_all_fine = True
+			print("========================")
 			result_message.setText(result)
 			OkButton = result_message.addButton('OK', QtWidgets.QMessageBox.AcceptRole)
 			result_message.exec()					
@@ -2444,10 +2542,15 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 	def clicked_revert(self,campaign_id): #Revert campaign button clicked
 		global campaigns_array, campaigns_new_array, campaigns_del_array, timezones_array, skillgroups_array
 		global canDelete, canUpdate,ucce_username, ucce_pass, ucce_server
+		is_not_deleted = True
 		old_campaign = []
+		print("Reverting changes")
 		if "New" in campaign_id: #It's new campaign
+			print("It was new campaign")
 			for campaign in campaigns_new_array: 	#get new config
 				if campaign[0] == campaign_id:
+					print("Found it and delete")
+					print("========================")
 					campaigns_new_array.remove(campaign) #Удаляем из массива
 					self.listWidget_Campaigns_List.clear()
 					self.fill_ListWidgetItem()
@@ -2458,7 +2561,11 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 					old_campaign = deepcopy(campaign)
 			for campaign in campaigns_del_array: #check if campaign was deleted
 				if campaign[0] == campaign_id:
+					print("It was deleted campaign")
 					campaigns_del_array.remove(campaign)
+					is_not_deleted = False
+					print("Found it and undelete")
+					print("========================")
 					font = self.listWidget_Campaigns_List.currentItem().font()
 					font.setStrikeOut(False)
 					self.listWidget_Campaigns_List.currentItem().setFont(font)
@@ -2466,13 +2573,17 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			for campaign in campaigns_new_array: 	#get new config
 				if campaign[0] == campaign_id:
 					campaigns_new_array[i] = deepcopy(old_campaign)
+					if is_not_deleted:
+						print("It was modified campaign")						
+						print("Found it and revert changes")
+						print("========================")					
 					self.listWidget_Campaigns_List.currentItem().setText(campaigns_new_array[i][1]) #Обновляем имя кампании в списке
 					self.campaign_selected()
 				i += 1
 
 	def clicked_add_sg(self,campaign_id): #Add SG clicked
-		global campaigns_array, skillgroups_array, campaigns_new_array
-		
+		global campaigns_array, skillgroups_array, campaigns_new_array, canUpdate
+		print("Add one more skill-group to campaign: ")
 		sg_campaign_del = []
 		TableWidgetRow = self.tableWidget_SG.rowCount()
 		self.tableWidget_SG.setRowCount(TableWidgetRow + 1)
@@ -2491,25 +2602,28 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				if skillgroup[0] == skillgroup_new[0]:
 					sg_campaign_del.remove(skillgroup)
 					
-		if len(sg_campaign_del) > 0:
-			for sg_del in sg_campaign_del: #Add non assigned free SGs from current config
+		if len(sg_campaign_del) > 0 and len(skillgroups_array) > 0:
+			print("Found & add previously deleted group(s) for this campaign")
+			for sg_del in sg_campaign_del: 
 				globals()["self.comboBox_CampSG" + str(TableWidgetRow)].addItem(sg_del[1])
 			globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setCurrentText(sg_campaign_del[0][1])
 			sg_array = deepcopy(sg_campaign_del[0])
-						
-		if len(skillgroups_array) > 0:
-			for all_skillgroup in skillgroups_array: #Add non assigned free SGs from current config
+			print("Add non assigned free SGs from current config too")
+			for all_skillgroup in skillgroups_array:
+				globals()["self.comboBox_CampSG" + str(TableWidgetRow)].addItem(all_skillgroup[0])						
+		elif len(skillgroups_array) > 0:
+			print("Add non assigned free SGs from current config")
+			for all_skillgroup in skillgroups_array:
 				globals()["self.comboBox_CampSG" + str(TableWidgetRow)].addItem(all_skillgroup[0])
-			if len(sg_campaign_del) == 0:
-				globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setCurrentText(skillgroups_array[0][0])
-				sg_array = [skillgroups_array[0][2],skillgroups_array[0][0],skillgroups_array[0][1],
-					"","0","0","1","",""]
+			globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setCurrentText(skillgroups_array[0][0])
+			sg_array = [skillgroups_array[0][2],skillgroups_array[0][0],skillgroups_array[0][1],"","0","0","1","",""]
 		elif len(campaigns_array) > 0:
+			print("There aren't free skill-groups. Add first group assigned to first existing campaigns")
 			globals()["self.comboBox_CampSG" + str(TableWidgetRow)].addItem(campaigns_array[0][43][0][1])
-			if len(sg_campaign_del) == 0:
-				globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setCurrentText(campaigns_array[0][43][0][1])
-				sg_array = deepcopy(campaigns_array[0][43][0])
+			globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setCurrentText(campaigns_array[0][43][0][1])
+			sg_array = deepcopy(campaigns_array[0][43][0])
 		elif len(sg_campaign_del) == 0:
+			print("There aren't free skill-groups and existing campaigns")
 			globals()["self.comboBox_CampSG" + str(TableWidgetRow)].addItem("Not Found")
 			globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setCurrentText("Not Found")
 			sg_array = ["","Not Found","","0","0","1","","",""]	
@@ -2520,8 +2634,12 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 	
 		globals()["self.comboBox_CampSG" + str(TableWidgetRow)].currentIndexChanged.connect(
 			lambda: self.comboBox_CampSG_changed(campaign_id,TableWidgetRow))	
-		self.tableWidget_SG.setCellWidget(		#Insert SG list
-			TableWidgetRow,0, globals()["self.comboBox_CampSG" + str(TableWidgetRow)]) 
+		if canUpdate:
+			globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setEnabled(True)
+		else:
+			globals()["self.comboBox_CampSG" + str(TableWidgetRow)].setEnabled(False)
+		#Insert SG list
+		self.tableWidget_SG.setCellWidget(TableWidgetRow,0, globals()["self.comboBox_CampSG" + str(TableWidgetRow)]) 
 		
 		try:
 			self.tableWidget_SG.itemChanged.disconnect()
@@ -2551,7 +2669,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		self.tableWidget_SG.setItem(TableWidgetRow,6, TableWidgetItem)
 		self.tableWidget_SG.itemChanged.connect(lambda: self.tableWidget_SG_ItemChanged(campaign_id))
 		self.tableWidget_SG.itemClicked.connect(lambda: self.tableWidget_SG_ItemClicked(campaign_id))
-
+		print("========================")
 		self.isCampaignChanged(campaign_id)
 
 	def clicked_rem_sg(self,campaign_id,row): #Remove SG clicked
@@ -2564,7 +2682,9 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		self.tableWidget_SG.removeRow(row)
 		for campaign in campaigns_new_array: 	#Try to find in campaigns_new_array
 			if campaign[0] == campaign_id:
+				print("Remove SG " + campaign[43][row][1] + " from campaign " + campaign[1])
 				campaign[43].pop(row)
+				print("========================")
 		self.isCampaignChanged(campaign_id)
 	
 #============Filters changed============================#
@@ -3066,13 +3186,17 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		self.isCampaignChanged(campaign_id)	
 
 	def tableWidget_SG_ItemClicked(self,campaign_id):
-		row = self.tableWidget_SG.currentRow()
-		try:
-			self.pushButton_Remove_SG.clicked.disconnect()
-		except:
-			pass
-		self.pushButton_Remove_SG.clicked.connect(lambda: self.clicked_rem_sg(campaign_id,row))		
-		self.pushButton_Remove_SG.setEnabled(True)
+		global canUpdate
+		if canUpdate:
+			print('TableWidget SG ItemClicked. Admin has "canUpdate" role. Enable Remove_SG button')
+			row = self.tableWidget_SG.currentRow()
+			try:
+				self.pushButton_Remove_SG.clicked.disconnect()
+			except:
+				pass
+			self.pushButton_Remove_SG.clicked.connect(lambda: self.clicked_rem_sg(campaign_id,row))		
+			self.pushButton_Remove_SG.setEnabled(True)
+			print("========================")
 
 	def comboBox_CampSG_changed(self,campaign_id,sg_id):
 		global campaigns_new_array,campaigns_array,skillgroups_array
@@ -3105,7 +3229,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		self.isCampaignChanged(campaign_id)		
 
 	def isCampaignChanged(self,campaign_id):
-		global campaigns_new_array,campaigns_array,campaigns_del_array
+		global campaigns_new_array,campaigns_array,campaigns_del_array,canDelete,canUpdate
 		old_campaign = []
 		new_campaign = []
 		for campaign in campaigns_new_array: 	#Try to find in campaigns_new_array
@@ -3127,13 +3251,13 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			font.setItalic(False)
 			self.listWidget_Campaigns_List.currentItem().setData(Qt.FontRole, font) #снимаем выделение
 			self.pushButton_Revert.setEnabled(False)
-		if campaigns_array != campaigns_new_array or len(campaigns_del_array) > 0:
+		if (campaigns_array != campaigns_new_array or len(campaigns_del_array) > 0) and canUpdate:
 			self.pushButton_Save.setEnabled(True)
 		else:
 			self.pushButton_Save.setEnabled(False)
 		#Checks if current campaign was deleted
 		for campaign in campaigns_del_array:
-			if campaign[0] == campaign_id:
+			if campaign[0] == campaign_id and canDelete:
 				self.pushButton_Revert.setEnabled(True)
 				self.pushButton_Delete.setEnabled(False)	
 

@@ -1,4 +1,4 @@
-__vi_utils_version__ = "1.0.77"
+__vi_utils_version__ = "1.2.1"
 
 from os import environ, popen #System
 from sys import argv, exit, platform #System
@@ -26,8 +26,11 @@ def getMachine_addr(): #Motherboard's SN
 		Machine_addr = -1
 	return Machine_addr
 
-def getUser_name(): #Get domain\login_Hostname
+def getUserHost_name(): #Get domain\login_Hostname
 	return environ['userdomain'] + '\\' + environ['username'] + "_" + environ['COMPUTERNAME']
+
+def getUser_name(): #Get domain\login
+	return environ['userdomain'] + '\\' + environ['username']
 
 def fromUserPass2Credentials(username,password): #Get base64 credentials from username & pass
 	usrPass = (username + ':' + password).encode()
@@ -41,11 +44,17 @@ def fromCredentials2UserPass(usrCredentials): #Get base64 username & pass from u
 	password = usrPass[usrPass.find(':') + 1:]
 	return username, password
 
-def encrypt_data(ucce_credentials,ucce_server): #Encrypt credentials
-	User_name = getUser_name()
+def encrypt_data(ucce_credentials,ucce_server,ucce_sql_enable, #Encrypt credentials
+	ucce_sql_NT_auth,ucce_sql_credentials,ucce_instance,ucce_sql_port): 
+	User_name = getUserHost_name()
 	Machine_addr = getMachine_addr()
 	text = "<connection>\n<credentials>" + ucce_credentials + "</credentials>\n"
-	text = text + "<server>" + ucce_server +	"</server>\n" + "</connection>"
+	text += "<server>" + ucce_server + "</server>\n"
+	text += "<sqlenable>" + ucce_sql_enable + "</sqlenable>\n"
+	text += "<sqlNTauth>" + ucce_sql_NT_auth + "</sqlNTauth>\n"
+	text += "<sqlcredentials>" + ucce_sql_credentials + "</sqlcredentials>\n"
+	text += "<instance>" + ucce_instance + "</instance>\n"
+	text += "<sqlport>" + ucce_sql_port + "</sqlport>\n" + "</connection>"
 	text = text.encode()
 	if Machine_addr == -1:
 		encrypted_text = -1
@@ -70,7 +79,7 @@ def encrypt_data(ucce_credentials,ucce_server): #Encrypt credentials
 	
 def decrypt_data(filedata): #Decrypt credentials
 	encrypted_text = filedata.read()
-	User_name = getUser_name()
+	User_name = getUserHost_name()
 	Machine_addr = getMachine_addr()
 	if Machine_addr == -1:
 		decrypted_text = -1
@@ -117,24 +126,84 @@ def load_connection_data(filedata): #Load properties from file
 	ucce_pass = ""
 	ucce_server = ""
 	ucce_credentials = ""
+	ucce_sql_credentials = ""
+	ucce_sql_username = ""
+	ucce_sql_pass = ""
+	ucce_instance = ""
+	ucce_sql_port = ""
+	ucce_sql_enable = False
+	ucce_sql_NT_auth = True	
 	is_all_fine = True
 	error_text = ""
 	try:
 		root = ElementTree.fromstring(filedata)
+		
 		e_ucce_server = root.find('server')
 		if not (e_ucce_server is None):
 			ucce_server = e_ucce_server.text
 		else:
 			is_all_fine = False
 			error_text = "Could't load server from connection properties."
+		e_ucce_sql_port = root.find('sqlport')
+		if not (e_ucce_sql_port is None):
+			ucce_sql_port = e_ucce_sql_port.text
+		else:
+			is_all_fine = False
+			error_text = "Could't load server from connection properties."
+		e_ucce_instance = root.find('instance')
+		if not (e_ucce_instance is None):
+			ucce_instance = e_ucce_instance.text
+		else:
+			is_all_fine = False
+			error_text = "Could't load server from connection properties."
 		e_ucce_credentials = root.find('credentials')
 		if not (e_ucce_credentials is None):
 			ucce_credentials = e_ucce_credentials.text
+			ucce_username,ucce_pass = fromCredentials2UserPass(ucce_credentials)			
 		else:
 			is_all_fine = False
 			error_text = "Could't load credentials connection properties."
-		ucce_username,ucce_pass = fromCredentials2UserPass(ucce_credentials)
+		e_ucce_sql_enable = root.find('sqlenable')
+		if not (e_ucce_sql_enable is None):
+			ucce_sql_enable = e_ucce_sql_enable.text
+			if ucce_sql_enable == "True":
+				ucce_sql_enable = True
+			else:
+				ucce_sql_enable = False
+		else:
+			is_all_fine = False
+			error_text = "Could't load server from connection properties."
+		e_ucce_sql_NT_auth = root.find('sqlNTauth')
+		if not (e_ucce_sql_NT_auth is None):
+			ucce_sql_NT_auth = e_ucce_sql_NT_auth.text
+			if ucce_sql_NT_auth == "True":
+				ucce_sql_NT_auth = True
+			else:
+				ucce_sql_NT_auth = False			
+		else:
+			is_all_fine = False
+			error_text = "Could't load server from connection properties."
+		e_ucce_sql_credentials = root.find('sqlcredentials')
+		if not (e_ucce_sql_credentials is None):
+			ucce_sql_credentials = e_ucce_sql_credentials.text
+			ucce_sql_username,ucce_sql_pass = fromCredentials2UserPass(ucce_sql_credentials)			
+		else:
+			is_all_fine = False
+			error_text = "Could't load credentials connection properties."
 	except Exception :
 		is_all_fine = False
 		error_text = "Error loading connection properties"
-	return is_all_fine, error_text, ucce_username, ucce_pass, ucce_server
+	connection_data = {
+			"is_all_fine": is_all_fine,
+			"error_text": error_text,
+			"ucce_username": ucce_username,
+			"ucce_pass": ucce_pass,
+			"ucce_server": ucce_server,
+			"ucce_sql_enable": ucce_sql_enable,
+			"ucce_sql_NT_auth": ucce_sql_NT_auth,
+			"ucce_sql_username": ucce_sql_username,
+			"ucce_sql_pass": ucce_sql_pass,
+			"ucce_instance": ucce_instance,
+			"ucce_sql_port": ucce_sql_port
+			}
+	return connection_data
