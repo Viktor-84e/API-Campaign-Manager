@@ -1,5 +1,5 @@
 # API-Campaign-Manager
-API Campaign Manager for cisco Cisco Unified Contact Center Enterprise
+API Campaign Manager <BR>for cisco Cisco Unified Contact Center Enterprise
 # Use Case Description
 Utility helps to work with outbound option campaigns created via API (create/modify/delete). Because it's impossible to do with standard configuration manager.<BR>
 After you entered connections settings in "Connection\Settings" tab, API-Campaign-Manager encrypt this data and store to file. This file could be opened & decrypted only on the same PC and for same user 
