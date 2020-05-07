@@ -1,5 +1,5 @@
 #Define global variables
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 is_all_fine = True
 error_text = ""
 canCreate = False
@@ -2585,6 +2585,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		global campaigns_array, skillgroups_array, campaigns_new_array, canUpdate
 		print("Add one more skill-group to campaign: ")
 		sg_campaign_del = []
+		sg_campaign_old = []
 		TableWidgetRow = self.tableWidget_SG.rowCount()
 		self.tableWidget_SG.setRowCount(TableWidgetRow + 1)
 		#Drop-down skill-group's list
