@@ -10,6 +10,7 @@ There are 2 choices:
 	PyQt5: https://www.riverbankcomputing.com/software/pyqt/download5 <BR>
 	requests: https://github.com/psf/requests <BR>
 	cryptography: https://github.com/pyca/cryptography <BR>
+	pyodbc: https://github.com/mkleehammer/pyodbc <BR>
 After that copy Main.py, GUI.py, vi_utils.py and logo.JPG to your local PC and run Main.py <BR>
 2) Also there is Main.exe - utility's version compiled for Qindows, you could try to use it. It doesn't need installation.
 ![Screenshot](screen.jpg?raw=true "Screenshot")
