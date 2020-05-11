@@ -1,0 +1,14 @@
+	This product includes software from the Python project (PSFL).
+https://www.python.org/
+
+	This product includes software from the PyQt5 project (GNU GPL v3)
+https://www.riverbankcomputing.com/
+
+	This product includes software from the requests project (Apache License v2)
+https://requests.readthedocs.io/en/master/
+
+	This product includes software from the cryptography project (Apache License v2)
+https://cryptography.io/en/latest/
+
+	This product includes software from the pyodbc project (MIT license)
+https://github.com/mkleehammer/pyodbc
