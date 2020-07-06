@@ -1,7 +1,8 @@
 # API-Campaign-Manager
 API Campaign Manager <BR>for cisco Cisco Unified Contact Center Enterprise
 # Use Case Description
-Utility helps to work with outbound option campaigns created via API (create/modify/delete). Because it's impossible to do with standard configuration manager.<BR>
+Utility helps to work with outbound option campaigns created via API (create/modify/delete).<BR>
+Because it's impossible to do this with standard configuration manager.<BR>
 After you entered connections settings in "Connection\Settings" tab, API-Campaign-Manager encrypt this data and store to file. This file could be opened & decrypted only on the same PC and for same user 
 # Installation
 There are 2 choices:
@@ -11,6 +12,7 @@ There are 2 choices:
 	requests: https://github.com/psf/requests <BR>
 	cryptography: https://github.com/pyca/cryptography <BR>
 	pyodbc: https://github.com/mkleehammer/pyodbc <BR>
-After that copy Main.py, GUI.py, vi_utils.py and logo.JPG to your local PC and run Main.py <BR>
-2) Also there is Main.exe - utility's version compiled for Qindows, you could try to use it. It doesn't need installation.
+After that copy Main.py, GUI.py, vi_utils.py and logo.JPG to your local PC and run Main.py<BR>
+2) Also there is Main.exe - utility's version compiled for Windows, you could try to use it. It doesn't need installation.
 ![Screenshot](screen.jpg?raw=true "Screenshot")
+[![published](https://static.production.devnetcloud.com/codeexchange/assets/images/devnet-published.svg)](https://developer.cisco.com/codeexchange/github/repo/Viktor-84e/API-Campaign-Manager)
