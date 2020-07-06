@@ -1,5 +1,5 @@
 #Define global variables
-__version__ = "1.2.2"
+__version__ = "1.3.2"
 is_all_fine = True
 error_text = ""
 canCreate = False
@@ -177,12 +177,12 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			self.pushButton_Retrieve.clicked.connect(self.clicked_retrieve)
 			self.pushButton_Retrieve.setEnabled(True)
 			self.statusbar.setStyleSheet("color:green;font-weight:bold;")
-			self.statusbar.showMessage("All's fine. Current version of application:" + __version__)
+			self.statusbar.showMessage("All's fine. Current version of application: " + __version__)
 		else:
 			self.statusbar.setStyleSheet("color:red;font-weight:bold;")
 			self.statusbar.showMessage(error_text)
 		if need_fill_connections:
-			self.statusbar.showMessage("File created successfully. Current version of application:" + __version__)
+			self.statusbar.showMessage("File created successfully. Current version of application: " + __version__)
 			self.open_connection_dialog()
 
 	def closeEvent(self,event): #Try to close dialogs windows if main one closed with cross
@@ -1417,7 +1417,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 	def check_new_campaign_data(self): #Validate campaign's data (after change ot for new)
 		global campaigns_array, campaigns_new_array, campaigns_del_array
 		is_validation_success_sum = True
-		validation_error_sum = "There are errors in new config!!!"
+		validation_error_sum = ""
 		campaign_updates = {}
 		campaign_adds = {}
 		campaign_dels = {}
@@ -1792,7 +1792,10 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				for delcampaign in campaigns_del_array:
 					if delcampaign[0] == campaign_id:
 						campaign_dels[delcampaign[1]] = delcampaign[2]
-				
+		if len (validation_error_sum) > 0:
+			validation_error_sum = "There are errors in new config!!!" + validation_error_sum
+		else:
+			validation_error_sum = "New config is valid"
 		return is_validation_success_sum, validation_error_sum, campaign_updates, campaign_adds, campaign_dels
 
 #Part 4. GUI functions:
@@ -2305,6 +2308,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 		print("========================")
 		if is_filter_fine:
 			self.pushButton_Retrieve.setEnabled(False)
+		self.setCursor(Qt.WaitCursor)
 		QTimer.singleShot(300, lambda: self.clicked_retrieve2(is_filter_fine,error_text))
 
 	def clicked_retrieve2(self,is_filter_fine,error_text_temp): #Retrieve button clicked. Step two. Get new data
@@ -2381,6 +2385,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			print("========================")
 		else:
 			self.statusbar.setStyleSheet("color:red;font-weight:bold;")
+		self.setCursor(Qt.ArrowCursor)
 		self.statusbar.showMessage(error_text)
 		self.pushButton_Retrieve.setEnabled(True)
 
@@ -2435,6 +2440,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 
 	def clicked_save(self): #Save button clicked. Step one. Disable Save button
 		self.pushButton_Save.setEnabled(False)
+		self.setCursor(Qt.WaitCursor)
 		QTimer.singleShot(300, lambda: self.clicked_save2())
 
 	def clicked_save2(self): #Save campaign button clicked. Step two
@@ -2538,6 +2544,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			result_message.setText(result)
 			OkButton = result_message.addButton('OK', QtWidgets.QMessageBox.AcceptRole)
 			result_message.exec()					
+		self.setCursor(Qt.ArrowCursor)
 
 	def clicked_revert(self,campaign_id): #Revert campaign button clicked
 		global campaigns_array, campaigns_new_array, campaigns_del_array, timezones_array, skillgroups_array

@@ -1,4 +1,4 @@
-__vi_utils_version__ = "1.2.1"
+__vi_utils_version__ = "1.2.3"
 
 from os import environ, popen #System
 from sys import argv, exit, platform #System
@@ -9,6 +9,7 @@ from cryptography.hazmat.backends import default_backend #Crypto
 from cryptography.hazmat.primitives import hashes #Crypto
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC #Crypto
 from xml.etree import ElementTree #Parse XML
+from pathlib import Path
 
 #Part 1. Systems functions:	
 def getMachine_addr(): #Motherboard's SN
@@ -112,13 +113,20 @@ def open_file(file_name): #Open file with properties
 		f = -2
 	return f
 	
-def save_file(file_name, text): #Save file with properties
+def save_file(file_name, text, option = "w+"): #Save file with properties
+	if "/" in file_name: #check if contains directories
+		try:
+			directory = file_name[:file_name.rfind("/")]
+			Path(directory).mkdir(parents=True, exist_ok=True)
+		except Exception as err:
+			print (str(err))
 	try:
-		f = open(file_name, "w+")
+		f = open(file_name, option)
 		f.write(text)
 		f.close()
 		return True
-	except:
+	except Exception as err:
+		print (str(err))
 		return False
 		
 def load_connection_data(filedata): #Load properties from file
