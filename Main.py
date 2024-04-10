@@ -106,7 +106,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			if decrypted_text == -2:
 				is_all_fine = False
 				error_text = 'Error opening file "connection.bin". Perhaps it created for different host or user. '
-				error_text = error_text + 'You need create new one via "Connection\Settings"'
+				error_text = error_text + 'You need create new one via "Connection\\Settings"'
 				print(error_text)
 				print("========================")
 				print("Ask to make new file")
@@ -236,7 +236,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 			response = self.ucce_http_request(url) #make http request
 			if response.status_code == 401:   #unauthorized
 				error_text = str(response.status_code) + " - " + response.reason
-				error_text = error_text + ". Please, check connections properties (Connection\Settings)"
+				error_text = error_text + ". Please, check connections properties (Connection\\Settings)"
 				is_all_fine = False
 			elif response.status_code == 200: #all's fine
 				error_text = "Data recieved successfully"
@@ -282,7 +282,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				url = None #And clear url for loop avoid
 				if response.status_code == 401:   #unauthorized
 					error_text = str(response.status_code) + " - " + response.reason
-					error_text = error_text + ". Please, check connections properties (Connection\Settings)"
+					error_text = error_text + ". Please, check connections properties (Connection\\Settings)"
 					is_all_fine = False
 				elif response.status_code == 200: #all's fine
 					error_text = "Data recieved successfully"
@@ -431,7 +431,7 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				url = None #And clear url for loop avoid
 				if response.status_code == 401:   #unauthorized
 					error_text = str(response.status_code) + " - " + response.reason
-					error_text = error_text + ". Please, check connections properties (Connection\Settings)"
+					error_text = error_text + ". Please, check connections properties (Connection\\Settings)"
 					is_all_fine = False
 				elif response.status_code == 200: #all's fine
 					error_text = "Data recieved successfully"
@@ -1762,9 +1762,10 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 					campaign_update = campaign_update + "	<skillGroupInfos>\n"
 				for skillgroup in campaign_sg_array:
 					campaign_update = campaign_update + "		<skillGroupInfo>\n"
-                    if campaignPurposeType == "ivrCampaign" and len(skillgroup[3]) == 0:
-                    else:
-                        campaign_update = campaign_update & "			<dialedNumber>" + skillgroup[3] + "</dialedNumber>\n"
+					if campaignPurposeType == "ivrCampaign" and len(skillgroup[3]) == 0:
+						campaign_update = campaign_update
+					else:
+						campaign_update = campaign_update & "			<dialedNumber>" + skillgroup[3] + "</dialedNumber>\n"
 					campaign_update = campaign_update + "			<ivrPorts>" + skillgroup[4]  + "</ivrPorts>\n"
 					campaign_update = campaign_update + "			<overflowAgents>" + skillgroup[5]  + "</overflowAgents>\n"
 					campaign_update = campaign_update + "			<recordsToCache>" + skillgroup[6]  + "</recordsToCache>\n"
