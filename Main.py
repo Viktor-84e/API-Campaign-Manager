@@ -1762,7 +1762,9 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 					campaign_update = campaign_update + "	<skillGroupInfos>\n"
 				for skillgroup in campaign_sg_array:
 					campaign_update = campaign_update + "		<skillGroupInfo>\n"
-					campaign_update = campaign_update + "			<dialedNumber>" + skillgroup[3] + "</dialedNumber>\n"
+                    if campaignPurposeType == "ivrCampaign" and len(skillgroup[3]) == 0:
+                    else:
+                        campaign_update = campaign_update & "			<dialedNumber>" + skillgroup[3] + "</dialedNumber>\n"
 					campaign_update = campaign_update + "			<ivrPorts>" + skillgroup[4]  + "</ivrPorts>\n"
 					campaign_update = campaign_update + "			<overflowAgents>" + skillgroup[5]  + "</overflowAgents>\n"
 					campaign_update = campaign_update + "			<recordsToCache>" + skillgroup[6]  + "</recordsToCache>\n"
