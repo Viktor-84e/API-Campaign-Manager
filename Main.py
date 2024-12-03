@@ -32,6 +32,10 @@ from pyodbc import connect #SQL
 from vi_utils import * #Global functions 4 this project
 from GUI import Ui_MainWindow, About_Dialog, Connection_Dialog
 
+# Disable - InsecureRequestWarning: Unverified HTTPS request
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 	def __init__(self): #Initialize Main Window
 		super().__init__()
