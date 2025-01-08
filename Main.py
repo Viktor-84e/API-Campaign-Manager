@@ -32,6 +32,10 @@ from pyodbc import connect #SQL
 from vi_utils import * #Global functions 4 this project
 from GUI import Ui_MainWindow, About_Dialog, Connection_Dialog
 
+# Disable - InsecureRequestWarning: Unverified HTTPS request
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 	def __init__(self): #Initialize Main Window
 		super().__init__()
@@ -1761,11 +1765,12 @@ class CampaignManagerApp(QtWidgets.QMainWindow, Ui_MainWindow):
 				else:
 					campaign_update = campaign_update + "	<skillGroupInfos>\n"
 				for skillgroup in campaign_sg_array:
+					skillgroup[8] = "0" if skillgroup[8] else skillgroup[8]
 					campaign_update = campaign_update + "		<skillGroupInfo>\n"
 					if campaignPurposeType == "ivrCampaign" and len(skillgroup[3]) == 0:
 						campaign_update = campaign_update
 					else:
-						campaign_update = campaign_update & "			<dialedNumber>" + skillgroup[3] + "</dialedNumber>\n"
+						campaign_update = campaign_update + "			<dialedNumber>" + skillgroup[3] + "</dialedNumber>\n"
 					campaign_update = campaign_update + "			<ivrPorts>" + skillgroup[4]  + "</ivrPorts>\n"
 					campaign_update = campaign_update + "			<overflowAgents>" + skillgroup[5]  + "</overflowAgents>\n"
 					campaign_update = campaign_update + "			<recordsToCache>" + skillgroup[6]  + "</recordsToCache>\n"
